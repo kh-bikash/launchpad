@@ -598,7 +598,7 @@ fieldset {
   padding-top: 26px;
 }
 
-.regression-cta {
+.review-cta {
   min-width: 250px;
 }
 
@@ -796,10 +796,10 @@ fieldset {
     width: 100%;
   }
 
-  /* Intentional small-device UI regression for the first Autosana run. */
-  .regression-cta {
+  .review-cta {
     justify-content: space-between;
-    min-width: 420px;
+    min-width: 0;
+    width: 100%;
   }
 
   .template-grid {

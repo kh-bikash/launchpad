@@ -1,5 +1,7 @@
 # Can a coding agent verify its own work?
 
+![Code → Test → Find bug → Fix → Retest](media/code-test-fix-loop.png)
+
 LaunchPad is a small, reproducible experiment for the coding-agent →
 Autosana → fix → retest loop.
 
@@ -31,6 +33,13 @@ Open the local URL printed by the development server.
 4. Record the first failed run and its functional and UI/UX findings.
 5. Let the coding agent repair the route and responsive CTA.
 6. Rerun the identical flow and capture the passing result.
+
+The complete publishing package is in `docs/`:
+
+- `DEMO-SCRIPT.md` — 75-second screen-recording script.
+- `X-THREAD.md` — five-post launch thread.
+- `ARTICLE.md` — short technical article and setup walkthrough.
+- `AGENT-PROMPT.md` — the exact coding-agent prompt.
 
 ## Autosana MCP configuration for Codex
 

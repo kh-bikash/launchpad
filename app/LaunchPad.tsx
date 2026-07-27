@@ -49,8 +49,7 @@ export function LaunchPad() {
   function reviewLaunch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    // Intentional regression for the first Autosana run.
-    goTo("templates");
+    goTo("review");
   }
 
   return (
@@ -295,7 +294,7 @@ function CreateLaunch({
             Save as draft
           </button>
           <button
-            className="primary-button regression-cta"
+            className="primary-button review-cta"
             type="submit"
             data-testid="review-launch"
           >
