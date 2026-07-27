@@ -1,18 +1,26 @@
-# Can a coding agent verify its own work?
+# LaunchPad
 
-![Code → Test → Find bug → Fix → Retest](media/code-test-fix-loop.png)
+LaunchPad is a shared launch-operations workspace for product, engineering, and marketing teams. It turns a launch idea into an editable plan with real ownership, due dates, checklist progress, and a single readiness view.
 
-LaunchPad is a small, reproducible experiment for the coding-agent →
-Autosana → fix → retest loop.
+## Watch the real product walkthrough
 
-The demo deliberately begins with two regressions:
+▶ **[Watch the 38-second silent walkthrough](video/raw-feature-demo/launchpad-full-real-use-case.mp4)**
 
-- **Functional:** Review launch plan opens the wrong screen.
-- **UI/UX:** The primary CTA is clipped at a small mobile width.
+The recording uses the real application and shows:
 
-Autosana runs the real local user flow, reports both findings, and gives the
-coding agent the evidence it needs to repair the application and rerun the
-same test.
+1. Creating a launch plan
+2. Generating a workflow-based checklist
+3. Activating the plan
+4. Assigning an owner and completing work
+5. Watching the saved dashboard readiness update
+
+## What LaunchPad does
+
+- Creates durable launch plans for product launches, feature releases, and campaigns.
+- Generates editable task checklists from practical workflow templates.
+- Lets teams assign task owners, due dates, and completion state.
+- Calculates launch and workspace readiness from saved task data.
+- Keeps launch records in a D1 database so they persist across reloads.
 
 ## Run locally
 
@@ -23,28 +31,23 @@ npm install
 npm run dev
 ```
 
-Open the local URL printed by the development server.
+Open the local URL printed by the server. The app provisions its local development database automatically when it first loads.
 
-## Run the experiment
+## Autosana verification demo
 
-1. Connect the Autosana MCP server to Codex or Cursor.
-2. Create the flow in [`autosana/review-launch-flow.md`](autosana/review-launch-flow.md).
-3. Give the coding agent the prompt in [`docs/AGENT-PROMPT.md`](docs/AGENT-PROMPT.md).
-4. Record the first failed run and its functional and UI/UX findings.
-5. Let the coding agent repair the route and responsive CTA.
-6. Rerun the identical flow and capture the passing result.
+LaunchPad is also the real application used for the Autosana agent-verification demo. The intended loop is:
 
-The complete publishing package is in `docs/`:
+```text
+Build or change a LaunchPad feature
+        ↓
+Autosana runs the real create → assign → complete → dashboard flow
+        ↓
+The coding agent fixes any functional or UI/UX finding
+        ↓
+Autosana reruns the exact flow and verifies the result
+```
 
-- `DEMO-SCRIPT.md` — 75-second screen-recording script.
-- `X-THREAD.md` — five-post launch thread.
-- `ARTICLE.md` — short technical article and setup walkthrough.
-- `AGENT-PROMPT.md` — the exact coding-agent prompt.
-
-## Autosana MCP configuration for Codex
-
-Add this to `~/.codex/config.toml`, replacing the placeholder with an API key
-from Autosana:
+To connect Autosana to Codex, add your API key to `~/.codex/config.toml`:
 
 ```toml
 [mcp_servers.autosana]
@@ -52,15 +55,6 @@ url = "https://mcp.autosana.ai/mcp"
 http_headers = { "x-api-key" = "<YOUR_API_KEY>" }
 ```
 
-Restart Codex after changing the MCP configuration. Never commit the API key.
+Restart Codex after adding the configuration. Never commit the API key.
 
-## Repository states
-
-The public repository preserves two tags:
-
-- `demo-broken` — reproduces both intentional regressions.
-- `demo-fixed` — contains the repaired flow.
-
-This disclosure is intentional: the experiment tests whether the agent can
-close the verification loop, not whether it can be surprised by an undisclosed
-bug.
+The original experiment assets and outreach material remain in `docs/` and `autosana/`.
