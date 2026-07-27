@@ -43,12 +43,3 @@ LaunchPad is also the real application used for the Autosana agent-verification 
             ↓
     Autosana reruns the exact flow and verifies the result
 
-To connect Autosana to Codex, add your API key to ~/.codex/config.toml:
-
-    [mcp_servers.autosana]
-    url = "https://mcp.autosana.ai/mcp"
-    http_headers = { "x-api-key" = "<YOUR_API_KEY>" }
-
-Restart Codex after adding the configuration. Never commit the API key.
-
-The original experiment assets and outreach material remain in docs/ and autosana/.
