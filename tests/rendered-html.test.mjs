@@ -22,15 +22,15 @@ async function render() {
   );
 }
 
-test("server-renders the LaunchPad experiment", async () => {
+test("server-renders the LaunchPad workspace", async () => {
   const response = await render();
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
 
   const html = await response.text();
-  assert.match(html, /<title>LaunchPad — Autosana agent loop demo<\/title>/i);
-  assert.match(html, /Ship the right thing, confidently\./);
-  assert.match(html, /Create launch checklist/);
+  assert.match(html, /<title>LaunchPad — Launch operations workspace<\/title>/i);
+  assert.match(html, /Move every launch from plan to ready\./);
+  assert.match(html, /Create launch/);
   assert.doesNotMatch(html, /codex-preview/);
   assert.doesNotMatch(html, /react-loading-skeleton/);
 });
