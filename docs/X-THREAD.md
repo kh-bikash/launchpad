@@ -1,6 +1,6 @@
 # Five-post X thread
 
-Replace `[VIDEO]`, `[REPO URL]`, and `[ARTICLE URL]` before publishing.
+Replace `[VIDEO]` after recording.
 
 ## Post 1
 
@@ -54,8 +54,9 @@ The interesting part wasn’t generating tests. It was closing the loop between
 writing code, verifying the real user flow, fixing the failure, and testing
 again.
 
-Full setup + repo: [REPO URL]
+Full setup + repo: https://github.com/kh-bikash/launchpad
 
-Technical walkthrough: [ARTICLE URL]
+Technical walkthrough:
+https://github.com/kh-bikash/launchpad/blob/main/docs/ARTICLE.md
 
 Suggested experiment by Build Fast with AI. Built with Autosana.

@@ -42,7 +42,7 @@ the user landed and whether the action held up on the smaller screen.
 Clone the repository and install the dependencies:
 
 ```bash
-git clone [REPO URL]
+git clone https://github.com/kh-bikash/launchpad.git
 cd launchpad-autosana-demo
 npm install
 npm run dev

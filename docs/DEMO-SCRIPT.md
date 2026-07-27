@@ -22,4 +22,4 @@ Autosana results visible at a readable zoom. Cut setup and waiting time.
 - Switch to the fixed commit only when the coding-agent repair occurs.
 - Use the same flow and device size for both runs.
 - Add a clear disclosure: “Both regressions were intentionally introduced.”
-- Replace `[REPO URL]` in the end card and thread before publishing.
+- Use `github.com/kh-bikash/launchpad` in the end card.
