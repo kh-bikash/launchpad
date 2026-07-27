@@ -20,9 +20,9 @@ export async function generateMetadata(): Promise<Metadata> {
     incomingHeaders.get("x-forwarded-proto") ??
     (host.startsWith("localhost") ? "http" : "https");
   const origin = `${protocol}://${host}`;
-  const title = "Can a coding agent verify its own work?";
+  const title = "LaunchPad — Move every launch from plan to ready";
   const description =
-    "A reproducible coding-agent experiment: build, test, find bugs, fix, and retest.";
+    "Create operational launch plans, assign task ownership, track progress, and keep releases moving from one shared workspace.";
 
   return {
     title,

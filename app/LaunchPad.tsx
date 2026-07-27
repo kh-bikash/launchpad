@@ -1,55 +1,248 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
-type Screen = "dashboard" | "create" | "templates" | "review";
+type Screen = "dashboard" | "create" | "templates" | "launch";
+type TemplateId = "product" | "feature" | "campaign";
 
-const tasks = [
+type LaunchTask = {
+  id: string;
+  launchId: string;
+  title: string;
+  detail: string;
+  owner: string;
+  dueDate: string;
+  completed: boolean;
+  position: number;
+};
+
+type Launch = {
+  id: string;
+  name: string;
+  description: string;
+  launchDate: string;
+  template: TemplateId;
+  status: "draft" | "active" | "ready";
+  createdAt: string;
+  updatedAt: string;
+  tasks: LaunchTask[];
+};
+
+const templates: Array<{
+  id: TemplateId;
+  name: string;
+  description: string;
+  count: number;
+}> = [
   {
-    id: "landing",
-    title: "Landing page",
-    detail: "Publish the launch page and verify the primary CTA.",
+    id: "product",
+    name: "Product launch",
+    description: "Positioning, launch page, analytics, announcement, and QA.",
+    count: 5,
   },
   {
-    id: "analytics",
-    title: "Analytics",
-    detail: "Confirm product and conversion events are arriving.",
+    id: "feature",
+    name: "Feature release",
+    description: "Release QA, documentation, rollout, and customer updates.",
+    count: 4,
   },
   {
-    id: "announcement",
-    title: "Announcement",
-    detail: "Prepare the launch post and customer update.",
+    id: "campaign",
+    name: "Campaign",
+    description: "Brief, creative assets, distribution, and reporting.",
+    count: 4,
   },
 ];
 
+function completion(launch: Launch) {
+  if (!launch.tasks.length) return 0;
+  return Math.round(
+    (launch.tasks.filter((task) => task.completed).length / launch.tasks.length) *
+      100,
+  );
+}
+
+function formatDate(value: string) {
+  if (!value) return "Date not set";
+  return new Intl.DateTimeFormat("en", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(`${value}T00:00:00`));
+}
+
+function dateInTwoWeeks() {
+  const date = new Date();
+  date.setDate(date.getDate() + 14);
+  return date.toISOString().slice(0, 10);
+}
+
 export function LaunchPad() {
   const [screen, setScreen] = useState<Screen>("dashboard");
-  const [projectName, setProjectName] = useState("");
-  const [selectedTasks, setSelectedTasks] = useState(
-    new Set(["landing", "analytics", "announcement"]),
-  );
+  const [launches, setLaunches] = useState<Launch[]>([]);
+  const [selectedLaunch, setSelectedLaunch] = useState<Launch | null>(null);
+  const [selectedTemplate, setSelectedTemplate] =
+    useState<TemplateId>("product");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [toast, setToast] = useState("");
+
+  const loadLaunches = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch("/api/launches", { cache: "no-store" });
+      const data = (await response.json()) as {
+        launches?: Launch[];
+        error?: string;
+      };
+      if (!response.ok) throw new Error(data.error ?? "Unable to load launches.");
+      setLaunches(data.launches ?? []);
+    } catch (loadError) {
+      setError(
+        loadError instanceof Error
+          ? loadError.message
+          : "Unable to load launches.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadLaunches();
+  }, [loadLaunches]);
 
   function goTo(next: Screen) {
     setScreen(next);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  function toggleTask(id: string) {
-    setSelectedTasks((current) => {
-      const next = new Set(current);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
+  function showToast(message: string) {
+    setToast(message);
+    window.setTimeout(() => setToast(""), 2200);
   }
 
-  function reviewLaunch(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  function openLaunch(launch: Launch) {
+    setSelectedLaunch(launch);
+    goTo("launch");
+  }
 
-    goTo("review");
+  async function createLaunch(input: {
+    name: string;
+    description: string;
+    launchDate: string;
+    template: TemplateId;
+  }) {
+    setSaving(true);
+    setError("");
+    try {
+      const response = await fetch("/api/launches", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      const data = (await response.json()) as {
+        launch?: Launch;
+        error?: string;
+      };
+      if (!response.ok || !data.launch) {
+        throw new Error(data.error ?? "Unable to create launch.");
+      }
+      setLaunches((current) => [data.launch!, ...current]);
+      setSelectedLaunch(data.launch);
+      showToast("Launch plan saved");
+      goTo("launch");
+    } catch (createError) {
+      setError(
+        createError instanceof Error
+          ? createError.message
+          : "Unable to create launch.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function patchTask(
+    taskId: string,
+    patch: Partial<Pick<LaunchTask, "owner" | "dueDate" | "completed">>,
+  ) {
+    if (!selectedLaunch) return;
+    const optimistic = {
+      ...selectedLaunch,
+      tasks: selectedLaunch.tasks.map((task) =>
+        task.id === taskId ? { ...task, ...patch } : task,
+      ),
+    };
+    setSelectedLaunch(optimistic);
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/tasks/${taskId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      const data = (await response.json()) as {
+        launch?: Launch;
+        error?: string;
+      };
+      if (!response.ok || !data.launch) {
+        throw new Error(data.error ?? "Unable to update task.");
+      }
+      setSelectedLaunch(data.launch);
+      setLaunches((current) =>
+        current.map((launch) =>
+          launch.id === data.launch!.id ? data.launch! : launch,
+        ),
+      );
+      showToast("Task updated");
+    } catch (updateError) {
+      setSelectedLaunch(selectedLaunch);
+      setError(
+        updateError instanceof Error
+          ? updateError.message
+          : "Unable to update task.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function setLaunchStatus(status: Launch["status"]) {
+    if (!selectedLaunch) return;
+    setSaving(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/launches/${selectedLaunch.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      const data = (await response.json()) as {
+        launch?: Launch;
+        error?: string;
+      };
+      if (!response.ok || !data.launch) {
+        throw new Error(data.error ?? "Unable to update launch.");
+      }
+      setSelectedLaunch(data.launch);
+      setLaunches((current) =>
+        current.map((launch) =>
+          launch.id === data.launch!.id ? data.launch! : launch,
+        ),
+      );
+      showToast(status === "ready" ? "Launch marked ready" : "Launch activated");
+    } catch (statusError) {
+      setError(
+        statusError instanceof Error
+          ? statusError.message
+          : "Unable to update launch.",
+      );
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -64,13 +257,13 @@ export function LaunchPad() {
           <span className="brand-mark">LP</span>
           <span>LaunchPad</span>
         </button>
-        <div className="demo-pill">
+        <div className="workspace-pill">
           <span className="live-dot" />
-          Autosana loop demo
+          Live launch workspace
         </div>
-        <button className="avatar" type="button" aria-label="Open account menu">
-          BF
-        </button>
+        <div className="save-state" aria-live="polite">
+          {saving ? "Saving…" : "All changes saved"}
+        </div>
       </header>
 
       <div className="workspace">
@@ -104,51 +297,93 @@ export function LaunchPad() {
             </button>
           </nav>
           <div className="sidebar-note">
-            <span>Experiment 01</span>
-            <strong>Agent verification loop</strong>
+            <span>Team workspace</span>
+            <strong>Your launch plans and task progress are saved.</strong>
           </div>
         </aside>
 
         <section className="content" aria-live="polite">
+          {error && (
+            <div className="error-banner" role="alert">
+              <span>{error}</span>
+              <button type="button" onClick={() => setError("")}>
+                Dismiss
+              </button>
+            </div>
+          )}
           {screen === "dashboard" && (
-            <Dashboard onCreate={() => goTo("create")} />
+            <Dashboard
+              launches={launches}
+              loading={loading}
+              onCreate={() => goTo("create")}
+              onOpen={openLaunch}
+            />
           )}
           {screen === "create" && (
             <CreateLaunch
-              projectName={projectName}
-              onProjectNameChange={setProjectName}
-              selectedTasks={selectedTasks}
-              onTaskToggle={toggleTask}
-              onSubmit={reviewLaunch}
+              initialTemplate={selectedTemplate}
+              saving={saving}
+              onSubmit={createLaunch}
               onCancel={() => goTo("dashboard")}
             />
           )}
           {screen === "templates" && (
-            <Templates onBack={() => goTo("create")} />
+            <Templates
+              onUse={(template) => {
+                setSelectedTemplate(template);
+                goTo("create");
+              }}
+            />
           )}
-          {screen === "review" && (
-            <Review
-              projectName={projectName}
-              selectedCount={selectedTasks.size}
-              onBack={() => goTo("create")}
+          {screen === "launch" && selectedLaunch && (
+            <LaunchWorkspace
+              launch={selectedLaunch}
+              saving={saving}
+              onBack={() => goTo("dashboard")}
+              onTaskChange={patchTask}
+              onStatusChange={setLaunchStatus}
             />
           )}
         </section>
       </div>
+      {toast && <div className="toast">{toast}</div>}
     </main>
   );
 }
 
-function Dashboard({ onCreate }: { onCreate: () => void }) {
+function Dashboard({
+  launches,
+  loading,
+  onCreate,
+  onOpen,
+}: {
+  launches: Launch[];
+  loading: boolean;
+  onCreate: () => void;
+  onOpen: (launch: Launch) => void;
+}) {
+  const metrics = useMemo(() => {
+    const allTasks = launches.flatMap((launch) => launch.tasks);
+    const completed = allTasks.filter((task) => task.completed).length;
+    const readiness = allTasks.length
+      ? Math.round((completed / allTasks.length) * 100)
+      : 0;
+    return {
+      readiness,
+      active: launches.filter((launch) => launch.status !== "ready").length,
+      completed,
+    };
+  }, [launches]);
+
   return (
     <div className="page page-dashboard">
-      <div className="eyebrow">Build fast with AI</div>
+      <div className="eyebrow">Launch operations</div>
       <div className="hero-row">
         <div>
-          <h1>Ship the right thing, confidently.</h1>
+          <h1>Move every launch from plan to ready.</h1>
           <p className="lede">
-            Turn a rough idea into a focused launch plan your whole team can
-            follow.
+            Build the checklist, assign the work, track progress, and keep the
+            release moving from one shared workspace.
           </p>
         </div>
         <button
@@ -158,27 +393,27 @@ function Dashboard({ onCreate }: { onCreate: () => void }) {
           data-testid="create-launch"
         >
           <span>＋</span>
-          Create launch checklist
+          Create launch
         </button>
       </div>
 
       <div className="metric-grid">
         <article className="metric-card accent-card">
-          <span className="card-label">Readiness score</span>
-          <strong>84%</strong>
+          <span className="card-label">Workspace readiness</span>
+          <strong>{metrics.readiness}%</strong>
           <div className="meter">
-            <span />
+            <span style={{ width: `${metrics.readiness}%` }} />
           </div>
-          <p>Up 12% since last week</p>
+          <p>Calculated from your saved launch tasks</p>
         </article>
         <article className="metric-card">
-          <span className="card-label">Active launches</span>
-          <strong>03</strong>
-          <p>Two are ready for review</p>
+          <span className="card-label">Open launches</span>
+          <strong>{String(metrics.active).padStart(2, "0")}</strong>
+          <p>Draft and active plans</p>
         </article>
         <article className="metric-card">
           <span className="card-label">Tasks completed</span>
-          <strong>21</strong>
+          <strong>{metrics.completed}</strong>
           <p>Across your launch workspace</p>
         </article>
       </div>
@@ -186,51 +421,77 @@ function Dashboard({ onCreate }: { onCreate: () => void }) {
       <section className="recent-panel">
         <div className="section-heading">
           <div>
-            <span className="card-label">In progress</span>
+            <span className="card-label">Saved work</span>
             <h2>Recent launches</h2>
           </div>
-          <button type="button" className="text-button">
-            View all
-          </button>
+          <span className="record-count">
+            {launches.length} {launches.length === 1 ? "launch" : "launches"}
+          </span>
         </div>
-        <div className="launch-row">
-          <div className="launch-monogram coral">MD</div>
-          <div>
-            <strong>Mobile dashboard</strong>
-            <span>Product launch · 8 of 10 tasks</span>
+        {loading ? (
+          <div className="loading-state">Loading your workspace…</div>
+        ) : launches.length ? (
+          launches.slice(0, 6).map((launch) => (
+            <button
+              className="launch-row"
+              type="button"
+              key={launch.id}
+              onClick={() => onOpen(launch)}
+            >
+              <div className="launch-monogram">
+                {launch.name.slice(0, 2).toUpperCase()}
+              </div>
+              <div>
+                <strong>{launch.name}</strong>
+                <span>
+                  {formatDate(launch.launchDate)} · {completion(launch)}% complete
+                </span>
+              </div>
+              <span className={`status-badge ${launch.status}`}>
+                {launch.status}
+              </span>
+            </button>
+          ))
+        ) : (
+          <div className="empty-state">
+            <strong>Your first launch starts here.</strong>
+            <p>Create a plan and LaunchPad will turn it into actionable work.</p>
+            <button className="secondary-button" type="button" onClick={onCreate}>
+              Create your first launch
+            </button>
           </div>
-          <span className="status-badge">Review</span>
-        </div>
-        <div className="launch-row">
-          <div className="launch-monogram blue">AP</div>
-          <div>
-            <strong>Analytics playbook</strong>
-            <span>Content launch · 5 of 8 tasks</span>
-          </div>
-          <span className="status-badge muted">Draft</span>
-        </div>
+        )}
       </section>
     </div>
   );
 }
 
-type CreateLaunchProps = {
-  projectName: string;
-  onProjectNameChange: (value: string) => void;
-  selectedTasks: Set<string>;
-  onTaskToggle: (id: string) => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  onCancel: () => void;
-};
-
 function CreateLaunch({
-  projectName,
-  onProjectNameChange,
-  selectedTasks,
-  onTaskToggle,
+  initialTemplate,
+  saving,
   onSubmit,
   onCancel,
-}: CreateLaunchProps) {
+}: {
+  initialTemplate: TemplateId;
+  saving: boolean;
+  onSubmit: (input: {
+    name: string;
+    description: string;
+    launchDate: string;
+    template: TemplateId;
+  }) => Promise<void>;
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [launchDate, setLaunchDate] = useState(dateInTwoWeeks);
+  const [template, setTemplate] = useState<TemplateId>(initialTemplate);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await onSubmit({ name, description, launchDate, template });
+  }
+
   return (
     <div className="page create-page">
       <button className="back-button" type="button" onClick={onCancel}>
@@ -239,51 +500,75 @@ function CreateLaunch({
       <div className="create-heading">
         <div>
           <div className="eyebrow">New launch</div>
-          <h1>Build your launch checklist.</h1>
+          <h1>Create an operational launch plan.</h1>
           <p>
-            Start with the essentials. You can fine-tune owners and due dates
-            after review.
+            Choose the right workflow, set the launch date, and start with a
+            practical checklist your team can own.
           </p>
-        </div>
-        <div className="step-indicator">
-          <span className="current">1</span>
-          <i />
-          <span>2</span>
-          <small>Details</small>
-          <small>Review</small>
         </div>
       </div>
 
-      <form className="form-shell" onSubmit={onSubmit}>
-        <div className="field-group">
-          <label htmlFor="project-name">Project name</label>
-          <input
-            id="project-name"
-            name="project-name"
-            placeholder="e.g. Autosana agent demo"
-            value={projectName}
-            onChange={(event) => onProjectNameChange(event.target.value)}
+      <form className="form-shell" onSubmit={submit}>
+        <div className="form-grid">
+          <div className="field-group">
+            <label htmlFor="project-name">Launch name</label>
+            <input
+              id="project-name"
+              name="project-name"
+              placeholder="e.g. Billing insights release"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              required
+            />
+          </div>
+          <div className="field-group">
+            <label htmlFor="launch-date">Target date</label>
+            <input
+              id="launch-date"
+              name="launch-date"
+              type="date"
+              value={launchDate}
+              onChange={(event) => setLaunchDate(event.target.value)}
+              required
+            />
+          </div>
+        </div>
+
+        <div className="field-group description-field">
+          <label htmlFor="project-description">Goal</label>
+          <textarea
+            id="project-description"
+            name="project-description"
+            placeholder="What are you launching, for whom, and what outcome matters?"
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
             required
           />
-          <span>Keep it short and recognizable to your team.</span>
         </div>
 
         <fieldset>
-          <legend>What should this launch include?</legend>
-          <p>Select the workstreams you want in your first checklist.</p>
-          <div className="task-list">
-            {tasks.map((task) => (
-              <label className="task-option" key={task.id}>
+          <legend>Choose a workflow</legend>
+          <p>LaunchPad will create an editable checklist from this template.</p>
+          <div className="template-options">
+            {templates.map((item) => (
+              <label
+                className={`template-option ${
+                  template === item.id ? "selected" : ""
+                }`}
+                key={item.id}
+              >
                 <input
-                  type="checkbox"
-                  checked={selectedTasks.has(task.id)}
-                  onChange={() => onTaskToggle(task.id)}
+                  type="radio"
+                  name="template"
+                  value={item.id}
+                  checked={template === item.id}
+                  onChange={() => setTemplate(item.id)}
                 />
-                <span className="custom-check">✓</span>
                 <span>
-                  <strong>{task.title}</strong>
-                  <small>{task.detail}</small>
+                  <strong>{item.name}</strong>
+                  <small>{item.description}</small>
                 </span>
+                <b>{item.count} tasks</b>
               </label>
             ))}
           </div>
@@ -291,14 +576,15 @@ function CreateLaunch({
 
         <div className="form-actions">
           <button className="secondary-button" type="button" onClick={onCancel}>
-            Save as draft
+            Cancel
           </button>
           <button
             className="primary-button review-cta"
             type="submit"
-            data-testid="review-launch"
+            disabled={saving}
+            data-testid="create-plan"
           >
-            Review launch plan
+            {saving ? "Creating…" : "Create launch plan"}
             <span>→</span>
           </button>
         </div>
@@ -307,62 +593,185 @@ function CreateLaunch({
   );
 }
 
-function Templates({ onBack }: { onBack: () => void }) {
+function Templates({ onUse }: { onUse: (template: TemplateId) => void }) {
   return (
-    <div className="page simple-page" data-testid="templates-screen">
-      <button className="back-button" type="button" onClick={onBack}>
-        ← Back
-      </button>
-      <div className="wrong-screen-flag">Unexpected destination</div>
-      <div className="eyebrow">Template library</div>
-      <h1>Start from a proven playbook.</h1>
+    <div className="page templates-page">
+      <div className="eyebrow">Workflow library</div>
+      <h1>Start with work that launches actually need.</h1>
       <p className="lede">
-        Choose a reusable template for your next product or content launch.
+        Each template creates a practical checklist that stays fully editable
+        after the plan is saved.
       </p>
       <div className="template-grid">
-        <article>
-          <span>01</span>
-          <strong>Product launch</strong>
-          <p>Positioning, rollout, analytics, and feedback.</p>
-        </article>
-        <article>
-          <span>02</span>
-          <strong>Feature release</strong>
-          <p>QA, documentation, announcement, and adoption.</p>
-        </article>
+        {templates.map((template, index) => (
+          <article key={template.id}>
+            <span>0{index + 1}</span>
+            <strong>{template.name}</strong>
+            <p>{template.description}</p>
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => onUse(template.id)}
+            >
+              Use template
+            </button>
+          </article>
+        ))}
       </div>
     </div>
   );
 }
 
-function Review({
-  projectName,
-  selectedCount,
+function LaunchWorkspace({
+  launch,
+  saving,
   onBack,
+  onTaskChange,
+  onStatusChange,
 }: {
-  projectName: string;
-  selectedCount: number;
+  launch: Launch;
+  saving: boolean;
   onBack: () => void;
+  onTaskChange: (
+    id: string,
+    patch: Partial<Pick<LaunchTask, "owner" | "dueDate" | "completed">>,
+  ) => Promise<void>;
+  onStatusChange: (status: Launch["status"]) => Promise<void>;
 }) {
+  const completedCount = launch.tasks.filter((task) => task.completed).length;
+  const progress = completion(launch);
+  const canMarkReady =
+    launch.tasks.length > 0 && completedCount === launch.tasks.length;
+
   return (
-    <div className="page simple-page" data-testid="review-screen">
+    <div className="page launch-page" data-testid="launch-workspace">
       <button className="back-button" type="button" onClick={onBack}>
-        ← Edit checklist
+        ← All launches
       </button>
-      <div className="success-mark">✓</div>
-      <div className="eyebrow">Ready for review</div>
-      <h1>{projectName || "Your launch plan"}</h1>
-      <p className="lede">
-        {selectedCount} workstreams are ready. Confirm the plan and invite your
-        team when you are happy with it.
-      </p>
-      <div className="review-card">
-        <span>Next step</span>
-        <strong>Assign owners and due dates</strong>
-        <button className="primary-button compact" type="button">
-          Confirm launch plan
-        </button>
+      <div className="launch-heading">
+        <div>
+          <div className="eyebrow">Launch workspace</div>
+          <h1>{launch.name}</h1>
+          <p className="lede">{launch.description}</p>
+          <div className="launch-meta">
+            <span>Target {formatDate(launch.launchDate)}</span>
+            <span>{launch.template} workflow</span>
+            <span className={`status-badge ${launch.status}`}>
+              {launch.status}
+            </span>
+          </div>
+        </div>
+        <div className="progress-card">
+          <strong>{progress}%</strong>
+          <span>
+            {completedCount} of {launch.tasks.length} tasks complete
+          </span>
+          <div className="meter">
+            <span style={{ width: `${progress}%` }} />
+          </div>
+        </div>
       </div>
+
+      <section className="task-panel">
+        <div className="section-heading">
+          <div>
+            <span className="card-label">Execution plan</span>
+            <h2>Launch checklist</h2>
+          </div>
+          {launch.status === "draft" ? (
+            <button
+              className="secondary-button small-button"
+              type="button"
+              disabled={saving}
+              onClick={() => onStatusChange("active")}
+              data-testid="activate-launch"
+            >
+              Activate plan
+            </button>
+          ) : (
+            <button
+              className="primary-button small-button"
+              type="button"
+              disabled={saving || !canMarkReady || launch.status === "ready"}
+              onClick={() => onStatusChange("ready")}
+              data-testid="mark-ready"
+            >
+              {launch.status === "ready" ? "Launch ready ✓" : "Mark ready"}
+            </button>
+          )}
+        </div>
+
+        <div className="task-table">
+          <div className="task-table-head">
+            <span>Task</span>
+            <span>Owner</span>
+            <span>Due date</span>
+          </div>
+          {launch.tasks.map((task) => (
+            <TaskRow
+              key={task.id}
+              task={task}
+              onTaskChange={onTaskChange}
+            />
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function TaskRow({
+  task,
+  onTaskChange,
+}: {
+  task: LaunchTask;
+  onTaskChange: (
+    id: string,
+    patch: Partial<Pick<LaunchTask, "owner" | "dueDate" | "completed">>,
+  ) => Promise<void>;
+}) {
+  const [owner, setOwner] = useState(task.owner);
+
+  useEffect(() => {
+    setOwner(task.owner);
+  }, [task.owner]);
+
+  return (
+    <div className={`work-task ${task.completed ? "completed" : ""}`}>
+      <label className="task-main">
+        <input
+          type="checkbox"
+          checked={task.completed}
+          onChange={(event) =>
+            onTaskChange(task.id, { completed: event.target.checked })
+          }
+          aria-label={`Complete ${task.title}`}
+        />
+        <span className="task-check">✓</span>
+        <span>
+          <strong>{task.title}</strong>
+          <small>{task.detail}</small>
+        </span>
+      </label>
+      <input
+        className="task-input owner-input"
+        aria-label={`Owner for ${task.title}`}
+        placeholder="Assign owner"
+        value={owner}
+        onChange={(event) => setOwner(event.target.value)}
+        onBlur={() => {
+          if (owner !== task.owner) void onTaskChange(task.id, { owner });
+        }}
+      />
+      <input
+        className="task-input"
+        type="date"
+        aria-label={`Due date for ${task.title}`}
+        value={task.dueDate}
+        onChange={(event) =>
+          void onTaskChange(task.id, { dueDate: event.target.value })
+        }
+      />
     </div>
   );
 }
